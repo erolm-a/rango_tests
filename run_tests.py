@@ -90,8 +90,8 @@ def main(url_git, student_no, date_deadline):
 
     try:
         #print(os.path.join(BASE_DIR, TEMP_DIR))
-        #shutil.rmtree(os.path.join(BASE_DIR, TEMP_DIR), ignore_errors=False, onerror=handleRemoveReadonly)
-        os.system("rmdir " + os.path.join(BASE_DIR, TEMP_DIR) + " /s /q")
+        shutil.rmtree(os.path.join(BASE_DIR, TEMP_DIR), ignore_errors=False, onerror=handleRemoveReadonly)
+        #shutils.rmtree("rmdir " + os.path.join(BASE_DIR, TEMP_DIR) + " /s /q")
     except Exception as e:
         print("Exception -> " + str(e))
         #print(os.path.join(BASE_DIR, TEMP_DIR) + " does not exist!!")
@@ -117,6 +117,7 @@ def main(url_git, student_no, date_deadline):
     print(out)
     out = out.decode('ascii')
     commits = out.split('\n')[0:-1]
+    print(commits)
     #commits.reverse()
 
     print("Repository has " + str(len(commits)) + " commits!")
@@ -144,64 +145,77 @@ def main(url_git, student_no, date_deadline):
         fp.write("I found errors while running the automated tests in github repository: "+url_git)
         fp.write('===========================================================================\n\n\n')
 
-    # Iterate over commits and run tests
-    for c in commits:
-        os.chdir(os.path.join(BASE_DIR, TEMP_DIR))
-        ret = subprocess.call(GIT_CHKOUT + " " + c, shell=True)
-        assert(ret == 0)
+    # Run tests...
+    os.chdir(os.path.join(BASE_DIR, TEMP_DIR))
+    ret = subprocess.call(GIT_CHKOUT + " " + commits[0], shell=True)
+    assert(ret == 0)
 
-        working_dir = ''
-        for root, dirs, files in os.walk("."):
-            for name in files:
-                if 'manage.py' == name:
-                    working_dir = os.path.abspath(root)
-                    break
+    working_dir = ''
+    for root, dirs, files in os.walk("."):
+        for name in files:
+            if 'manage.py' == name:
+                working_dir = os.path.abspath(root)
+                break
 
-        print(working_dir)
+    print(working_dir)
 
-        # RUN TESTS HERE!!!!
-        if os.path.isdir(os.path.abspath(working_dir + '/rango')):
-            os.chdir(working_dir)
+    # RUN TESTS HERE!!!!
+    if os.path.isdir(os.path.abspath(working_dir + '/rango')):
+        os.chdir(working_dir)
+        try:
+            shutil.rmtree(working_dir + '/rango/migrations', ignore_errors=False, onerror=handleRemoveReadonly)
+            #os.system("rmdir " + os.path.join(BASE_DIR, TEMP_DIR) + " /s /q")
+            os.remove("db.sqlite3")
+        except:
+            print("Couldn't delete db.sqlite3 and migrations folder")
+
+        # FIXME:
+        # chromedriver is not shipped (by default) on windows machines.
+        # on Linux machines, it depends on the distro. Ubuntu/Debian does not,
+        # Arch Linux (the distro I am using right now) does.
+        # So, the best thing Linux folks could do is:
+        # 1. check if `which chromedriver` actually returns something
+        # 2. if yes, just go on
+        # 3. if no, download the chromedriver from http://chromedriver.storage.googleapis.com/
+        #    and include it (somewhere... over the rainbox!)
+        #
+        # A better solution for this would be preferrable
+        #
+        # Enrico (erolm_a) Trombetta
+
+        if LIVE_TESTS and os.name == "nt":
             try:
-                shutil.rmtree(working_dir + '/rango/migrations', ignore_errors=False, onerror=handleRemoveReadonly)
-                #os.system("rmdir " + os.path.join(BASE_DIR, TEMP_DIR) + " /s /q")
-                os.remove("db.sqlite3")
-            except:
-                print("Couldn't delete db.sqlite3 and migrations folder")
-            
-            if LIVE_TESTS:
-                try:
-                    shutil.copy2(BASE_DIR + "/chromedriver.exe", working_dir)
-                except Exception:
-                    import traceback
-                    traceback.print_exc()
-                    #print("Couldn't copy chromedriver")
-            
+                shutil.copy2(BASE_DIR + "/chromedriver.exe", working_dir)
+            except Exception:
+                import traceback
+                traceback.print_exc()
+                print("Couldn't copy chromedriver")
+
+        try:
+            subprocess.call('python manage.py makemigrations rango')
+        except:
             try:
-                subprocess.call('python manage.py makemigrations rango')
+                subprocess.call('python manage.py makemigrations')
             except:
-                try:
-                    subprocess.call('python manage.py makemigrations')
-                except:
-                    print("Error while making migrations rango!")
-            try:
-                subprocess.call('python manage.py migrate')
-            except:
-                print("Error while migrating rango!")
-            for each in test_files:
-                shutil.copyfile(os.path.join(BASE_DIR, each), os.path.join(working_dir , 'rango', each))
+                print("Error while making migrations rango!")
+        try:
+            subprocess.call('python manage.py migrate')
+        except:
+            print("Error while migrating rango!")
+        for each in test_files:
+            shutil.copyfile(os.path.join(BASE_DIR, each), os.path.join(working_dir , 'rango', each))
 
 
-            test_cases, error_in_tests = runtests(test_cases, error_in_tests)
+        test_cases, error_in_tests = runtests(test_cases, error_in_tests)
 
-        # Discard everything
-        os.chdir(os.path.join(BASE_DIR, TEMP_DIR))
-        ret = subprocess.call(GIT_ADD, shell=True)
-        assert(ret == 0)
-        ret = subprocess.call(GIT_STASH, shell=True)
-        ret = subprocess.call(GIT_STASH_DROP, shell=True)
-        ret = subprocess.call(GIT_CHKOUT_MASTER, shell=True)
-        assert(ret == 0)
+    # Discard everything
+    os.chdir(os.path.join(BASE_DIR, TEMP_DIR))
+    ret = subprocess.call(GIT_ADD, shell=True)
+    assert(ret == 0)
+    ret = subprocess.call(GIT_STASH, shell=True)
+    ret = subprocess.call(GIT_STASH_DROP, shell=True)
+    ret = subprocess.call(GIT_CHKOUT_MASTER, shell=True)
+    assert(ret == 0)
     ## -------
     os.chdir(BASE_DIR)
 
@@ -219,8 +233,8 @@ def main(url_git, student_no, date_deadline):
     #         fp.write(each)
     #         fp.write('===========================================================================\n\n\n')
 
-    #shutil.rmtree(os.path.join(BASE_DIR, TEMP_DIR), ignore_errors=False, onerror=handleRemoveReadonly)
-    os.system("rmdir " + os.path.join(BASE_DIR, TEMP_DIR) + " /s /q")
+    shutil.rmtree(os.path.join(BASE_DIR, TEMP_DIR), ignore_errors=False, onerror=handleRemoveReadonly)
+    #os.system("rmdir " + os.path.join(BASE_DIR, TEMP_DIR) + " /s /q")
 
 if __name__ == "__main__":
     import argparse

@@ -155,6 +155,17 @@ class Chapter7LiveServerTestCase(StaticLiveServerTestCase):
         categories = test_utils.create_categories()
         i = 0
 
+        # If already in chapter 9 the user might have already implemented
+        # the login system, so the add_page link may incur in a authentication
+        # page.
+        # Anyway, this login system actually uses the /admin page, which is
+        # available since chapter 5
+        try:
+            test_utils.login(self)
+        except:
+            #
+            pass
+
         for category in categories:
             i = i + 1
             # Access link to add page for the category
